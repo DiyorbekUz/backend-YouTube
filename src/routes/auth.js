@@ -5,5 +5,6 @@ const router = require('express').Router()
 router.post('/login', controller.LOGIN)
 router.post('/register', validator, controller.REGISTER)
 router.post('/check', controller.CHECK)
+router.get("/getId", controller.ID)
 
 module.exports = router

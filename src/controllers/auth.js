@@ -108,6 +108,30 @@ const CHECK = (req, res, next) => {
     }
 }
 
+const ID = (req, res, next) => {
+    try{
+        const {token} = req.headers
+        if(!token){
+            throw new Error("Token invalid")
+        }
+
+        res.status(200).json({
+            status: 200, 
+            userId: verify(token).userId,
+            message: "OK"
+        })
+        
+    } catch (error) {
+        res.status(400).json({
+            status: 400, 
+            userId: false,
+            message: error.message
+        })
+    }
+}
+
+
+
 module.exports = {
-    LOGIN, REGISTER, CHECK
+    LOGIN, REGISTER, CHECK, ID
 }

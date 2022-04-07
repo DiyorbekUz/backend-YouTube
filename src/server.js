@@ -9,7 +9,6 @@ const PORT = process.env.PORT || 5000
 
 app.use(express.static(path.resolve(__dirname, "uploads")))
 app.use(cors())
-// set arguments to process
 require('./config.js')
 require('./utils/validation.js')
 
@@ -37,7 +36,9 @@ app.use(videoRouter)
 
 
 app.use((error, req, res, next) => {
-    
+
+    console.log(error)
+
     if (error.name == 'ValidationError') {
         return res.status(error.status).json({
             status: error.status,
@@ -46,6 +47,16 @@ app.use((error, req, res, next) => {
             error: true,
         })
     }
+
+    if (error.name == 'AuthorizationError') {
+        return res.status(error.status).json({
+            status: error.status,
+            message: error.message,
+            errorName: error.name,
+            error: true,
+        })
+    }
+
     
     if (error.status != 500) {
         return res.status(error.status).json({
