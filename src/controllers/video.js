@@ -147,7 +147,7 @@ function DELETE(req,res,next){
             return next(new ValidationError(404,"No such as video"))
         }
         let [deleted] = videos.splice(videoIndex,1)
-        fs.unlinkSync(path.join(process.cwd(), 'src',"public","videos", deleted.fileName))
+        fs.unlinkSync(path.join(__dirname, '../', 'uploads', 'videos', deleted.fileName))
 
         req.writeFile("videos",videos)
 
@@ -163,7 +163,7 @@ function DELETE(req,res,next){
 function GET(req, res, next){
     try {
         const { fileName } = req.params
-        res.download( path.join(process.cwd(), 'src', 'public',"videos", fileName) )
+        res.download( path.join(__dirname, '../', 'uploads', 'videos', fileName) )
     } catch(error) {
         return next(new ValidationError(400,e.message))
     }

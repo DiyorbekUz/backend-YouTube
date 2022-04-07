@@ -17,7 +17,7 @@ const fileFilterPhoto = (req, file, cb) => {
 }
 const imageUpload = multer({
     storage: multer.diskStorage({
-        destination: __dirname+"/../public/avatar",
+        destination: __dirname+"/../uploads/logos",
         filename: function (req, file, cb) {
             const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9)
             cb(null,uniqueSuffix+path.extname(file.originalname))
@@ -29,6 +29,6 @@ const imageUpload = multer({
 
 router.get("/info",info)
 router.post("/login",registerSchema,controller.LOGIN)
-router.post("/register",imageUpload.single('avatar'),registerSchema,controller.REGISTER)
+router.post("/register",imageUpload.single('logos'),registerSchema,controller.REGISTER)
 
 module.exports = router
