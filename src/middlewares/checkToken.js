@@ -1,31 +1,41 @@
-const { AuthorizationError, InternalServerError} = require('../util/error')
-const { verify } = require('../util/jwt')
+const { AuthorizationError } = require('../utils/error.js')
+const { verify } = require('../utils/jwt.js')
+const fs = require('fs')
+const path = require('path')
 
 module.exports = (req, res, next) => {
-    try {
-        const { token } = req.headers
+	try {
+		const { token } = req.headers
 
-        if(!token) {
-            return next(new AuthorizationError(401, "user is not authorized!"))
-        }
+		if(!token) {
+			return next(
+                new AuthorizationError(400, 'User is un authorized')
+            )
+		}
 
-        const { userId, agent } = verify(token)
+		const { userId, agent } = verify(token)
 
-        if(!(req.headers['user-agent'] === agent)) {
-            return next(new AuthorizationError(401, "Token is invalid!"))
-        }
+		if(!(req.headers['user-agent'] == agent)) {
+			return next(
+                new AuthorizationError(400, 'Token is invalid')
+            )
+		}
 
-        const users = req.readFile('users')
-        let user = users.find(user => user.userId === userId)
+		let users = JSON.parse(fs.readFileSync(path.join(__dirname, '../', 'database', 'users.json'), 'utf-8')) || []
+		let user = users.find(user => user.userId == userId)
 
-        if(!user) {
-            return next(AuthorizationError(401, "The token is invalid!"))
-        }
+		if(!user) {
+			return next(
+                new AuthorizationError(400, 'The token invalid')
+            )
+		}
 
-        req.userId = userId
+		req.userId = userId
 
-        return next()
-    } catch(error) {
-        return next(new AuthorizationError(error.message))
-    }
+		return next()
+	} catch(error) {
+		return next(
+            new AuthorizationError(400, error.message)
+        )
+	}
 }
