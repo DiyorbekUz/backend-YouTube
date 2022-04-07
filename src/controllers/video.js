@@ -1,136 +1,179 @@
-const { AuthorizationError, InternalServerError } = require('../utils/error.js')
-const {verify} = require("../utils/jwt.js")
-const path = require("path")
-const fs = require("fs")
+const {ValidationError, InternalServerError, AuthorizationError} = require("../util/error")
+const path = require("path");
+const fs = require("fs");
 
-const POST = (req, res, next) => {
-    try {
-        let videos = req.readFile("videos") || []
+function SEARCH(req,res){
+    try{
+        let { userId,search } = req.query
 
-        if(!req.body.caption || req.body.caption.trim().length < 5){
-            return next(new AuthorizationError(401, "Caption required and minimum symbols 5!"))
-        }
+        let videos = req.readFile("videos")
+        let users = req.readFile("users")
+        search = search ? search.toLowerCase().trim(): search
+        videos = videos.filter(video => {
 
-        if(!req?.files?.video){
-            return next(new AuthorizationError(401, "Video required!"))
-        }
-        
-        if(req.files.video.size >= 50485760){
-            return next(new AuthorizationError(401, "Video size must be 50mb"))
-        }
-        
-
-        if(!(["video/mp4"].includes(req.files.video.mimetype))){
-            return next(new AuthorizationError(401, `Please upload file types video/mp4`))
-        }
-
-
-        const videoName = Date.now() + "_" + req.files.video.name
-
-        const d = new Date
-        const dformat = [d.getMonth()+1, d.getDate(), d.getFullYear()].join('/')+' '+[d.getHours(),d.getMinutes(),d.getSeconds()].join(':');
-        
-        const newVideo = {
-            videoId: videos.length ? videos.at(-1).videoId + 1 : 1,
-            userId: verify(req.headers.token).userId,
-            caption: req.body.caption,
-            video: videoName,
-            videoDate: dformat,
-            videoSize: Math.ceil(req.files.video.size / 1024 / 1024)
-        }
-
-        videos.push(newVideo)
-
-        req.writeVideo(videoName, req.files.video.data)
-        req.writeFile("videos", videos)
-
-        return res.status(200).json(newVideo)
-
-    } catch (error) {
-        return next(new InternalServerError(500, error.message))
-    }
-}
-
-const GET = (req, res, next) => {
-    try {
-        let videos = req.readFile("videos") || []
-
-        videos = videos.map(video => {
-            video.video = path.resolve(__dirname , "..", "uploads", "videos", video.video)  
-            return video
+            console.log(userId ? video.userId == userId : true)
+            return userId ? video.userId == userId : true
+            && search ? video.Title.toLowerCase().includes(search) : true
         })
+        if(videos.length){
+            videos.map(el => {
+                let date = new Date(el.Created)
+                el.user = users.find(user => user.userId ===el.userId)
+                delete el.userId
+                el.size = (el.size/1024/1024).toFixed(1)
+                el.Created = date.toLocaleDateString('en-ZA')+"|"+date.getHours()+"."+date.getMinutes()
+                return el
+        })}
 
-        return res.status(200).json(videos)
-
-    } catch (error) {
-        return next(new InternalServerError(500, error.message))
+        res.json({
+            ok:true,
+            message:"ok",
+            videos
+        })
+    }
+    catch (e){
+        return InternalServerError(e.message)
     }
 }
 
+function MYVIDEOS(req,res,next){
+    try{
+        let user = req.userId
+        let videos = req.readFile("videos")
 
-const PUT = (req, res, next) => {
+        videos = videos.filter(video => {
+            return video.userId === req.userId
+        })
+        res.json({
+            ok:true,
+            message:"ok",
+            videos
+        })
+    }
+    catch (e){
+        return next(new AuthorizationError(400,e.message))
+    }
+}
+
+function POST(req, res, next) {
     try {
-        let videos = req.readFile("videos") || []
-        let { videoId, caption } = req.body
-        let userId = verify(req.headers.token).userId
-        if(!videoId){
-            return next(new AuthorizationError(401, "VideoId not found!"))
-        }
-        
-        let video = videos.find(video => video.videoId == videoId && video.userId == userId)
-        
-        if(!video) {
-            return next(new AuthorizationError(401, "Video not found!"))
+        let {Title} = req.body
+
+        if (!req.file) {
+            return next(new ValidationError(400, "The video is required!"))
         }
 
-        if(!req.body.caption || req.body.caption.trim().length < 5){
-            return next(new AuthorizationError(401, "Caption required and minimum symbols 5!"))
+        const size = req.file.size
+        const fileName = req.file.filename
+        Title = Title?.trim()
+        if (!Title) {
+            return next(new ValidationError(400, "Title is required!"))
+        }
+        if (Title.length < 3 || Title.length > 30) {
+            return next(new ValidationError(400, "Title is too long or small!"))
         }
 
-        video.caption = caption
+        const videos = req.readFile('videos')
+
+        const newVideo = {
+            videoId: videos.length ? videos[videos.length - 1].videoId + 1 : 1,
+            userId: req.userId,
+            Title,
+            fileName,
+            size,
+            Created: new Date()
+        }
+        videos.push(newVideo)
         req.writeFile("videos", videos)
-        return res.status(200).json(video)
 
-    } catch (error) {
-        return next(new InternalServerError(500, error.message))
+        res.json({
+            ok: true,
+            message: "Video uploaded"
+        })
+    } catch (e) {
+        return next(new InternalServerError(e.message))
     }
 }
 
-const DELETE = (req, res, next) => {
+function PUT(req, res, next) {
     try {
-        let videos = req.readFile("videos") || []
-        let userId = verify(req.headers.token).userId
+        let {videoId, Title} = req.body
+        console.log(req.body)
+        if (!videoId) {
+            return next(new ValidationError(400, "videoId is required!"))
+        }
+
+        if (!Title) {
+            return next(new ValidationError(400, "Title is required!"))
+        }
+        Title = Title?.trim()
+        if (Title.length < 3 && Title.length > 30) {
+            return next(new ValidationError(413, "Title is too long or small!"))
+        }
+
+        const videos = req.readFile("videos")
+        const video = videos.find(video => video.videoId === videoId && video.userId === req.userId)
+
+        if (!video) {
+            return next(new ValidationError(404, "There is no such video!"))
+        }
+
+        video.Title = Title
+
+        req.writeFile("videos", videos)
+
+        return res.status(201).json({
+            ok: true,
+            message: "The video updated!",
+            video: video
+        })
+    } catch (e) {
+        next(new InternalServerError(e.message))
+    }
+}
+
+function DELETE(req,res,next){
+    try {
         let { videoId } = req.body
-        
-        if(!videoId){
-            return next(new AuthorizationError(401, "VideoId not found!"))
-        }
-        
-        let video = videos.find(video => video.videoId == videoId && video.userId == userId)
-        if(!video) {
-            return next(new AuthorizationError(401, "Video not found!"))
+
+        if(!videoId) {
+            return next(new ValidationError(400, "videoId is required!"))
         }
 
-        let videoPath = path.resolve(__dirname, "..", "uploads", "videos", video.video) 
-        
-        fs.unlinkSync(videoPath)
+        const videos = req.readFile("videos")
+        const videoIndex = videos.findIndex(video => video.videoId === videoId && video.userId === req.userId)
 
-        videos = videos.filter(el => el.videoId != videoId)
-        
-        req.writeFile("videos", videos)
-        
-        return res.status(200).json(video)
+        if(videoIndex === -1){
+            return next(new ValidationError(404,"No such as video"))
+        }
+        let [deleted] = videos.splice(videoIndex,1)
+        fs.unlinkSync(path.join(process.cwd(), 'src',"public","videos", deleted.fileName))
 
-    } catch (error) {
-        return next(new InternalServerError(500, error.message))
+        req.writeFile("videos",videos)
+
+        return res.status(201).json({
+            ok:true,
+            message:"Video is deleted!"
+        })
+    } catch (e) {
+        next(new InternalServerError(e.message))
     }
 }
 
-
+function GET(req, res, next){
+    try {
+        const { fileName } = req.params
+        res.download( path.join(process.cwd(), 'src', 'public',"videos", fileName) )
+    } catch(error) {
+        return next(new ValidationError(400,e.message))
+    }
+}
 
 module.exports = {
     POST,
-    GET,
     PUT,
-    DELETE
+    DELETE,
+    GET,
+    SEARCH,
+    MYVIDEOS
 }

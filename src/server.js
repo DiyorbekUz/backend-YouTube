@@ -1,80 +1,46 @@
-const fileUpload = require("express-fileupload")
-const express = require('express')
-const cors = require("cors")
-const path = require('path')
-const fs = require('fs')
+const express = require("express")
 const app = express()
+const { PORT } = require("../config")
+const routers = require("./routes")
+const fs = require("fs");
+const path = require("path");
+const model = require("./middlewares/model")
+const multer = require("multer")
+const cors = require("cors")
 
-const PORT = process.env.PORT || 5000
-
-app.use(express.static(path.resolve(__dirname, "uploads")))
 app.use(cors())
-require('./config.js')
-require('./utils/validation.js')
-
-// middlewares
-const modelMiddleware = require('./middlewares/model.js')
-
-app.use(fileUpload({
-    limits: { fileSize: 50 * 1024 * 1024 },
-}));
-
-
-app.use(modelMiddleware({ databasePath: path.join(__dirname, 'database')}))
 app.use(express.json())
-
-
-// routes
-const authRouter = require('./routes/auth.js')
-const userRouter = require('./routes/user.js')
-const videoRouter = require('./routes/video.js')
-
-app.use(authRouter)
-app.use(userRouter)
-app.use(videoRouter)
-
-
+app.use(express.static(path.join(process.cwd(),"src","public")))
+app.use(model({databasePath:path.join(__dirname, 'database')}))
+app.use(routers)
 
 app.use((error, req, res, next) => {
 
-    console.log(error)
-
-    if (error.name == 'ValidationError') {
-        return res.status(error.status).json({
-            status: error.status,
-            message: error.message.details[0].message,
-            errorName: error.name,
-            error: true,
-        })
+    if (error instanceof multer.MulterError){
+        return res.status(400).json(
+        {
+            ok:false, message: error.message
+        }
+        )
+    }
+    if(+error.status !== 500) {
+        return res.status(error.status).json(
+            {
+                ok:false,
+                message: error.message
+            }
+        )
     }
 
-    if (error.name == 'AuthorizationError') {
-        return res.status(error.status).json({
-            status: error.status,
-            message: error.message,
-            errorName: error.name,
-            error: true,
-        })
-    }
+    fs.appendFileSync(
+        path.join(process.cwd(), 'log.txt'),
+        `${Date.now()}  ${req.method}  ${req.url}  "${error.message}"\n`
+    )
 
-    
-    if (error.status != 500) {
-        return res.status(error.status).json({
-            status: error.status,
-            message: error.message,
-            errorName: error.name,
-            error: true,
-        })
-    }
-    
-    fs.appendFileSync('./log.txt', `${req.url}__${req.method}__${Date.now()}__${error.name}__${error.message}\n`)
-    
-    return res.status(error.status).json({
-        status: error.status,
-        message: 'Internal Server Error',
-        errorName: error.name,
-        error: true,
+    return res.status(500).json({
+        ok:false,
+        message: "Internal Server Error"
     })
 })
 
-app.listen(PORT, () => console.log('server is ready at http://localhost:' + PORT))
+app.listen(PORT,() => console.log("server is running at "+PORT))

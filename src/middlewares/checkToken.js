@@ -1,26 +1,31 @@
-const { AuthorizationError, InternalServerError } = require('../utils/error.js')
-const JWT = require('../utils/jwt.js')
+const { AuthorizationError, InternalServerError} = require('../util/error')
+const { verify } = require('../util/jwt')
 
-module.exports = (req, _, next) => {
+module.exports = (req, res, next) => {
     try {
         const { token } = req.headers
 
-        if (!token) {
-            return next(new AuthorizationError(401, "token is required!"))
+        if(!token) {
+            return next(new AuthorizationError(401, "user is not authorized!"))
         }
 
-        const { agent, ip } = JWT.verify(token)
+        const { userId, agent } = verify(token)
 
-        const reqIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress
-        const reqAgent = req.headers['user-agent']
-
-        if (reqAgent !== agent || reqIp !== ip) {
-            return next(new AuthorizationError(401, "token is sent from wrong device!!"))
+        if(!(req.headers['user-agent'] === agent)) {
+            return next(new AuthorizationError(401, "Token is invalid!"))
         }
+
+        const users = req.readFile('users')
+        let user = users.find(user => user.userId === userId)
+
+        if(!user) {
+            return next(AuthorizationError(401, "The token is invalid!"))
+        }
+
+        req.userId = userId
 
         return next()
-
-    } catch (error) {
-        return next(new AuthorizationError(401, error.message))
+    } catch(error) {
+        return next(new AuthorizationError(error.message))
     }
 }
